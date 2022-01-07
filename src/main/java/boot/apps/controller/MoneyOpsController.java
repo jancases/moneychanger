@@ -75,7 +75,7 @@ public class MoneyOpsController {
 			Error error = new Error("500");
 			lsErrors.add(error);
 			
-			ResponseHelper responseHelper = new ResponseHelper(null, metadata, null, lsErrors);
+			ResponseHelper responseHelper = new ResponseHelper(metadata, lsErrors);
 			return ResponseEntity.status(INTERNAL_SERVER_ERROR).body(responseHelper);
 		}
 	}
