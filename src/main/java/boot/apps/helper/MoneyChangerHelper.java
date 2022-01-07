@@ -12,16 +12,31 @@ public class MoneyChangerHelper {
 	public void performValidation(double bill, AtomicInteger quarterAlloc, AtomicInteger dimesAlloc, AtomicInteger nickelsAlloc, AtomicInteger penniesAlloc) throws Exception {
 		
 		// Check if input is valid
-		if(!(bill == 1 || bill == 2 || bill == 5 || bill == 10 || bill == 20 || bill == 50 || bill == 100)) {
+		if(!isValidBill(bill)) {
 			throw new Exception("Unknown bill denomination. Available bills are 1, 2, 5, 10, 20, 50, 100");
 		}
 		
 		// Check if we have enough coins
-		int change = (int) Math.ceil(bill * 100);
-		if( change > ((quarterAlloc.get() * 25) + (dimesAlloc.get() * 10) + (nickelsAlloc.get() * 5) + penniesAlloc.get() ) ) {
+		if(!isAllocationEnough(bill, quarterAlloc, dimesAlloc, nickelsAlloc, penniesAlloc)) {
 			throw new Exception ("There is not enough coins for change. Kindly reconfigure and try again. Thank you.");
 		}
 
+	}
+	
+	public boolean isValidBill(double bill) {
+		boolean isValid = true;
+		if(!(bill == 1 || bill == 2 || bill == 5 || bill == 10 || bill == 20 || bill == 50 || bill == 100)) {
+			isValid = false;
+		}		
+	}
+	
+	public boolean isAllocationEnough(double bill, AtomicInteger quarterAlloc, AtomicInteger dimesAlloc, AtomicInteger nickelsAlloc, AtomicInteger penniesAlloc) {
+		boolean isAllocationEnough = true;
+		int change = (int) Math.ceil(bill * 100);
+		if( change > ((quarterAlloc.get() * 25) + (dimesAlloc.get() * 10) + (nickelsAlloc.get() * 5) + penniesAlloc.get() ) ) {
+			isAllocationEnough = false;
+		}
+		return isAllocationEnough;
 	}
 	
 	public HashMap<String, Integer> getChangeBreakdown(double changeDue, AtomicInteger quarterAlloc, AtomicInteger dimesAlloc, AtomicInteger nickelsAlloc, AtomicInteger penniesAlloc) {
