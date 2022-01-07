@@ -1,7 +1,7 @@
 app:
   config:
     maxalloc:
-      quarters: 10
-      dimes: 10
-      nickels: 10
-      pennies: 10
+      quarters: 100
+      dimes: 100
+      nickels: 100
+      pennies: 100
