@@ -14,8 +14,6 @@ public class ResponseHelper implements Serializable {
 	private transient Object data;
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	private List<Error> errors;
-	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private Pagination pagination;
 	
 	public ResponseHelper() {
 	}
@@ -29,19 +27,11 @@ public class ResponseHelper implements Serializable {
 		this.metadata = metadata;
 	}
 	
-	public ResponseHelper(Object data, Metadata metadata, Pagination pagination) {
-		this.data = data;
+	public ResponseHelper(Metadata metadata, List<Error> errors) {
 		this.metadata = metadata;
-		this.pagination = pagination;
+		this.errors   = errors;
 	}
-	
-	public ResponseHelper(Object data, Metadata metadata, Pagination pagination, List<Error> errors) {
-		this.data = data;
-		this.metadata = metadata;
-		this.pagination = pagination;
-		this.errors = errors;
-	}
-	
+		
 	public static ResponseHelper serializeException(Metadata metadata, List<Error> errors, int httpCode) {
 		ResponseHelper js = new ResponseHelper();
 		metadata.setHttpCode(httpCode);
@@ -75,14 +65,6 @@ public class ResponseHelper implements Serializable {
 	
 	public void setData(Object data) {
 		this.data = data;
-	}
-	
-	public Pagination getPagination() {
-		return pagination;
-	}
-	
-	public void setPagination(Pagination pagination) {
-		this.pagination = pagination;
 	}
 	
 	public List<Error> getErrors() {
