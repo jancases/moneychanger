@@ -5,6 +5,7 @@ import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.servlet.http.HttpServletRequest;
 
@@ -13,8 +14,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import boot.apps.config.AppConfig;
 import boot.apps.model.Error;
@@ -27,10 +28,10 @@ import lombok.extern.log4j2.Log4j2;
 @Log4j2
 public class MoneyOpsController {
 	
-	private volatile int quarterCounter;
-	private volatile int dimesCounter;
-	private volatile int nickelsCounter;
-	private volatile int penniesCounter;
+	private AtomicInteger quarterAlloc = new AtomicInteger();
+	private AtomicInteger dimesAlloc   = new AtomicInteger();
+	private AtomicInteger nickelsAlloc = new AtomicInteger();
+	private AtomicInteger penniesAlloc = new AtomicInteger();
 	
 	private AppConfig appConfig;
 	
@@ -39,11 +40,11 @@ public class MoneyOpsController {
 		initCounters();
 	}
 	
-	private synchronized void initCounters() {
-		quarterCounter = Integer.parseInt(appConfig.getProperty("app.config.maxalloc.quarters"));
-		dimesCounter   = Integer.parseInt(appConfig.getProperty("app.config.maxalloc.dimes"));
-		nickelsCounter = Integer.parseInt(appConfig.getProperty("app.config.maxalloc.nickels"));
-		penniesCounter = Integer.parseInt(appConfig.getProperty("app.config.maxalloca.pennies"));
+	private void initCounters() {
+		quarterAlloc.set(Integer.parseInt(appConfig.getProperty("app.config.maxalloc.quarters")));
+		dimesAlloc.set(Integer.parseInt(appConfig.getProperty("app.config.maxalloc.dimes")));
+		nickelsAlloc.set(Integer.parseInt(appConfig.getProperty("app.config.maxalloc.nickels")));
+		penniesAlloc.set(Integer.parseInt(appConfig.getProperty("app.config.maxalloca.pennies")));
 	}
 	
 	@RequestMapping(value="/health", method = RequestMethod.GET)
@@ -65,9 +66,9 @@ public class MoneyOpsController {
 			
 			return ResponseEntity.ok(responseHelper);
 		} catch (Exception ex) {
-			log.error("Error with change endpoint - moneyops", ex);
+			log.error("Error with change endpoint - moneyops ", ex);
 			
-			Metadata metadata = new Metadata("Response for requesting change - moneyops", "/moneyops/change", 500, requestTime);
+			Metadata metadata = new Metadata("Response for requesting change - moneyops :: " + ex.getMessage(), "/moneyops/change", 500, requestTime);
 			
 			List<Error> lsErrors = new ArrayList<> ();
 			
@@ -78,61 +79,90 @@ public class MoneyOpsController {
 			return ResponseEntity.status(INTERNAL_SERVER_ERROR).body(responseHelper);
 		}
 	}
+
+	private void performValidation(double bill) throws Exception {
+		
+		// Check if input is valid
+		if(!(bill == 1 || bill == 2 || bill == 5 || bill == 10 || bill == 20 || bill == 50 || bill == 100)) {
+			throw new Exception("Unknown bill denomination. Available bills are 1, 2, 5, 10, 20, 50, 100");
+		}
+		
+		// Check if we have enough coins
+		int change = (int) Math.ceil(bill * 100);
+		if( change > ((quarterAlloc.get() * 25) + (dimesAlloc.get() * 10) + (nickelsAlloc.get() * 5) + penniesAlloc.get() ) ) {
+			throw new Exception ("There is not enough coins for change. Kindly reconfigure and try again. Thank you.");
+		}
+
+	}
 	
-	private synchronized String getChangeBreakdown(double changeDue) {
+	private String getChangeBreakdown(double changeDue) {
 		int change = (int) Math.ceil(changeDue*100);
 		
-		int intMaxQuarters = quarterCounter;
-		int quarters       = Math.round((int) change/25);
-		
-		if(intMaxQuarters - quarters >= 0) {
-			change = change % 25;
-			quarterCounter = intMaxQuarters - quarters;
+		int quarters  = (quarterAlloc.get() > 0) ? Math.round((int) change/25) : 0;
+		if(quarterAlloc.get() > 0 && quarters > 0) {
+			if(quarterAlloc.get() >= quarters) {
+				change = change % 25;
+				quarterAlloc.set(quarterAlloc.get() - quarters);
+			} else {
+				quarters = quarters - quarterAlloc.get();
+				change = (quarters * 25);
+				quarterAlloc.set(0);
+			}
 		}
 		
-		int intMaxDimes = dimesCounter;
-		int dimes       = Math.round((int) change/10);
-		if(intMaxDimes - dimes >= 0) {
-			change = change % 10;
-			dimesCounter = intMaxDimes - dimes;
+		int dimes = (dimesAlloc.get() > 0) ? Math.round((int) change/10) : 0;
+		if (dimes > 0 && dimesAlloc.get() > 0) {
+			if(dimesAlloc.get() >= dimes) {
+				change = change % 10;
+				dimesAlloc.set(dimesAlloc.get() - dimes);
+			} else {
+				dimes = dimes - dimesAlloc.get();
+				change = (dimes * 10);
+				dimesAlloc.set(0);
+			}
 		}
 		
-		int intMaxNickels = nickelsCounter;
-		int nickels = Math.round((int) change/5);
+		int nickels = (nickelsAlloc.get() > 0) ? Math.round((int) change/5) : 0;
 		
-		if(intMaxNickels - nickels >= 0) {
-			change = change % 5;
-			nickelsCounter = intMaxNickels - nickels; 
+		if(nickelsAlloc.get() > 0 && nickels > 0) {
+			if(nickelsAlloc.get() >= nickels) {
+				change = change % 5;
+				nickelsAlloc.set(nickelsAlloc.get() - nickels); 
+			} else {
+				nickels = nickels - nickelsAlloc.get();
+				change = (nickels * 5);
+				nickelsAlloc.set(0);
+			}
 		}
 		
-		int intMaxPennies = penniesCounter;
 		int pennies = Math.round((int) change/1);
 		
-		if(intMaxPennies - pennies >= 0) {
-			penniesCounter = intMaxPennies - pennies;
+		if(penniesAlloc.get() > 0 && pennies > 0) {
+			if(penniesAlloc.get() >= pennies) {
+				penniesAlloc.set(penniesAlloc.get() - pennies);
+			} else {
+				pennies = pennies - penniesAlloc.get();
+				change = pennies;
+				penniesAlloc.set(0);
+			}
 		}
 		
 		return getResponseString(quarters, dimes, nickels, pennies);	
 	}
 	
-	private void performValidation(double bill) throws Exception {
-		if(!(bill == 1 || bill == 2 || bill == 5 || bill == 10 || bill == 20 || bill == 50 || bill == 100)) {
-			throw new Exception("Unknown bill denomination. Available bills are 1, 2, 5, 10, 20, 50, 100");
-		}
-	}
 	
 	private String getResponseString(int quarters, int dimes, int nickels, int pennies) {
 		StringBuilder builder = new StringBuilder();
-		builder.append("Change breakdown is ");
+		builder.append("Coins for this change are ");
 		builder.append(quarters + " Quarters , ");
 		builder.append(dimes    + " Dimes , ");
 		builder.append(nickels  + " Nickels, ");
 		builder.append(pennies  + " Pennies, ");
-		builder.append("Counters are ");
-		builder.append(quarterCounter + " Max Quarters , ");
-		builder.append(dimesCounter   + " Max Dimes ,");
-		builder.append(nickelsCounter + " Max Nickels ,");
-		builder.append(penniesCounter + " Max Pennies ,");
+		builder.append(":: Max Counters are ");
+		builder.append(quarterAlloc.get() + " Max Quarters , ");
+		builder.append(dimesAlloc.get()   + " Max Dimes ,");
+		builder.append(nickelsAlloc.get() + " Max Nickels ,");
+		builder.append(penniesAlloc.get() + " Max Pennies ,");
 		return builder.toString();
 	}
 
